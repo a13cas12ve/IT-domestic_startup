@@ -1,0 +1,590 @@
+---
+title: "startup project"
+output: html_notebook
+---
+```{r}
+
+```
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r}
+#First we install and load the pertinent packages for our analysis.
+install.packages("tidyverse")
+library(tidyverse)
+install.packages("purrr")
+library(purrr)
+```
+```{r}
+library(tidyverse)
+#time to set up our datasets, 
+#we'll use read_csv2 since .csv are formatted in the european way
+#first of all we set up the data for average household online spending
+#REMEMBER TO SET UP YOUR OWN DIRECTORY FOR THE CSV FILES
+Money_spent_by_household_online <- read_csv2("D:/proyecto de start up/R proyecto/money_spent_on_the_internet.csv")
+#then, we set up the money raised by online shopping.
+#notice that MM stands for Moving Average in spanish.
+Money_earned_through_online_shopping <- read_csv2("D:/proyecto de start up/R proyecto/money_earned_through_online_shopping.csv")
+#now, we set up the percentage of shopping done online
+Percentage_of_shopping_done_online <- read_csv2("D:/proyecto de start up/R proyecto/percentage_of_shopping_made_online.csv")
+#lastly we set up the HDI data.
+#this data is already sorted out using my own criteria.
+#this data's source is the https://databank.worldbank.org/Human-development-index/id/363d401b#
+HDI <- read_csv2("D:/proyecto de start up/R proyecto/human_development_index.csv")
+
+```
+```{r}
+library(tidyverse)
+#we'll format the columns
+#starting with HDI, for simplicity I transposed it in excel, so let's get it to R
+HDI_transposed <- read_csv2("D:/proyecto de start up/R proyecto/human_development_index_transposed.csv")
+#we check column formats
+HDI_transposed_class <- lapply(HDI_transposed, function(x) type.convert(as.character(x), as.is = TRUE))
+View(HDI_transposed_class)
+#We can see years is arleady an integer, while the rest are characters and numeric values.
+#First let's remove the dollar simbols and turn the characters to integers, and set the separators.
+HDI_transposed$`GNI, PPP (current international $)` <- lapply(HDI_transposed$`GNI, PPP (current international $)`,gsub,pattern="$",fixed=TRUE,replacement="")
+HDI_transposed$`GNI, PPP (current international $)` <- lapply(HDI_transposed$`GNI, PPP (current international $)`,gsub,pattern=".",fixed=TRUE,replacement="")
+HDI_transposed$`GNI, PPP (current international $)` <- lapply(HDI_transposed$`GNI, PPP (current international $)`,gsub,pattern=",",fixed=TRUE,replacement=".")
+#now we set the columns to numeric
+HDI_transposed <- HDI_transposed %>% mutate_all(as.numeric)
+#time to check again its variable type
+HDI_transposed_class <- lapply(HDI_transposed, function(x) type.convert(as.character(x), as.is = TRUE))
+View(HDI_transposed_class)
+#Let's now format the rest of the datasets
+Money_earned_through_online_shopping_class <- lapply(Money_earned_through_online_shopping, function(x) type.convert(as.character(x), as.is = TRUE))
+
+View(Money_earned_through_online_shopping)
+
+Money_spent_by_household_online_class <- lapply(Money_spent_by_household_online, function(x) type.convert(as.character(x), as.is = TRUE))
+
+View(Money_spent_by_household_online)
+
+Percentage_of_shopping_done_online_class <- lapply(Percentage_of_shopping_done_online, function(x) type.convert(as.character(x), as.is = TRUE))
+
+View(Percentage_of_shopping_done_online)
+
+#we appreciate that they are already numeric so our formatting would be done.
+```
+```{r}
+library(tidyverse)
+#Here we'll study the relation between the average money spent by household and earnings.
+#We'll add both columns into a separate data frames
+cola <- Money_earned_through_online_shopping$...7
+colb <- Money_spent_by_household_online$Average_spending
+#before adding the other column we have to make them the same length.
+cola <- cola[-c(8:28)]
+colb <- colb[-8]
+#now we combine them
+Money_earned_in_thousands<-data.frame(cola)
+Av_money_spent<-data.frame(colb)
+
+
+Money_earned_spent <- data.frame(Money_earned_in_thousands, Av_money_spent)
+#we change the names of the columns for clarity purposes
+names(Money_earned_spent) <- c('Money_earned_in_thousands', 'Av_money_spent')
+#let's study the correlation 
+cor(Money_earned_spent$Av_money_spent, Money_earned_spent$Money_earned_in_thousands, method = 'pearson')
+#since correlation is of 0.9338819, let's study if we can perform parametric tests.
+#first, let's check normality.
+shapiro.test(Money_earned_spent$Av_money_spent)
+shapiro.test(Money_earned_spent$Money_earned_in_thousands)
+#in both cases p-value > 0.05 so they're normally distributed
+#linearity and independence are also true
+#let's state the model
+spend_earn <- lm(Money_earned_in_thousands ~ Av_money_spent, data = Money_earned_spent)
+
+summary(spend_earn)
+#we can see that the R-squared doesn't reach 0.9
+#maybe by adding another independent variable we can raise adjusted r-squared to 0.9
+#let's try adding percentage of shopping made online
+
+Percentage_of_shopping_made_online_col <- Percentage_of_shopping_done_online$Percentage_of_shopping_made_online
+#we have to delete data from 2010 to 2013
+Percentage_of_shopping_made_online_col <- Percentage_of_shopping_made_online_col[-c(1,2,3,4)]
+
+Money_earned_spent <- data.frame(Money_earned_in_thousands, Av_money_spent, Percentage_of_shopping_made_online_col)
+names(Money_earned_spent) <- c('Money_earned_in_thousands', 'Av_money_spent', 'percentage_of_shopping_done_online')
+#now we look for correlation to check linearity
+cor(Money_earned_spent$percentage_of_shopping_done_online, Money_earned_spent$Av_money_spent, method = 'pearson')
+
+#correlation is of 0.9389269
+#let's test the new variable's distribution
+shapiro.test(Money_earned_spent$percentage_of_shopping_done_online)
+#p-value is 0.9455 so it's distributed normally without doubt.
+#let's try and fit the new model
+spend_earn_percentage <- lm(Money_earned_in_thousands ~ Av_money_spent + percentage_of_shopping_done_online, data = Money_earned_spent)
+summary(spend_earn_percentage)
+#we have an adjusted r-squared of 0.977 so our model is a great fit
+#Standard deviation is only 3.17 million transactions 
+#Notice the standard error has diminished from 8.2 million transactions to 3.17.
+#We have determined a clear relation between the earnings and the other variables.
+#We have also fitted a model capable of predicting earnings.
+```
+```{r}
+#I'll proceed now to the descriptive analysis of the data obtained by a survey.
+#let's import the data
+library(tidyverse)
+survey <- read_csv2("D:/proyecto de start up/R proyecto/survey.csv")
+
+#let's study first the percentage of people earning 0-1000 raw a year
+earnings <- c("0€-1.000€", "0€-1.000€", "1.000€-10.000€", "1.000€-10.000€", "10.000€-20.000€", "10.000€-20.000€", "20.000€-30.000€", "20.000€-30.000€", "30.000€-40.000€", "30.000€-40.000€", "40.000€-50.000€", "40.000€-50.000€", "50.000€-60.000€", "50.000€-60.000€", "60.000€-100.000€", "60.000€-100.000€", "+100.000€", "+100.000€")
+
+willing2hiree_earnings <- c("Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No")
+
+ppl_willing2hire_earnings <- c(length(which(survey$`ingresos personales brutos anuales` == "0€-1.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "0€-1.000€" & survey$`dispuesto a contratar` == "No")),
+                               length(which(survey$`ingresos personales brutos anuales` == "1.000€-10.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "1.000€-10.000€" & survey$`dispuesto a contratar` == "No")),
+                               length(which(survey$`ingresos personales brutos anuales` == "10.000€-20.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "10.000€-20.000€" & survey$`dispuesto a contratar` == "No")),
+                               length(which(survey$`ingresos personales brutos anuales` == "20.000€-30.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "20.000€-30.000€" & survey$`dispuesto a contratar` == "No")),
+                               length(which(survey$`ingresos personales brutos anuales` == "30.000€-40.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "30.000€-40.000€" & survey$`dispuesto a contratar` == "No")),
+                               length(which(survey$`ingresos personales brutos anuales` == "40.000€-50.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "40.000€-50.000€" & survey$`dispuesto a contratar` == "No")),
+                               length(which(survey$`ingresos personales brutos anuales` == "50.000€-60.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "50.000€-60.000€" & survey$`dispuesto a contratar` == "No")),
+                               length(which(survey$`ingresos personales brutos anuales` == "60.000€-100.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "60.000€-100.000€" & survey$`dispuesto a contratar` == "No")),
+                               length(which(survey$`ingresos personales brutos anuales` == "+100.000€" & survey$`dispuesto a contratar` == "Sí")),
+                               length(which(survey$`ingresos personales brutos anuales` == "+100.000€" & survey$`dispuesto a contratar` == "No"))
+                               )
+
+pctg_of_ppl_willing2hire_earnings <- c((length(which(survey$`ingresos personales brutos anuales` == "0€-1.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "0€-1.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "0€-1.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "0€-1.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "1.000€-10.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "1.000€-10.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "1.000€-10.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "1.000€-10.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "10.000€-20.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "10.000€-20.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "10.000€-20.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "10.000€-20.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "20.000€-30.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "20.000€-30.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "20.000€-30.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "20.000€-30.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "30.000€-40.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "30.000€-40.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "30.000€-40.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "30.000€-40.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "40.000€-50.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "40.000€-50.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "40.000€-50.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "40.000€-50.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "50.000€-60.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "50.000€-60.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "50.000€-60.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "50.000€-60.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "60.000€-100.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "60.000€-100.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "60.000€-100.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "60.000€-100.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "+100.000€" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ingresos personales brutos anuales` == "+100.000€")))*100,
+                               (length(which(survey$`ingresos personales brutos anuales` == "+100.000€" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ingresos personales brutos anuales` == "+100.000€")))*100
+                               )
+
+
+# 20k-30k, from here on we're working with little  samples so results might no be conclusive.
+#let's set de data into  a data frame.
+#let's export the data frame to conduct visualization.
+ppl_willing_or_not2hire_earnings <- data.frame(earnings, willing2hiree_earnings, ppl_willing2hire_earnings, pctg_of_ppl_willing2hire_earnings)
+
+write.csv2(ppl_willing_or_not2hire_earnings, "D:/proyecto de start up/R proyecto/R_export/people_willing_or_not_to_hire_earningsDOM.csv")
+```
+```{r}
+#Here I'll study the relationship between employment situation and willingness to do remunerated domestic tasks.
+library(tidyverse)
+survey <- read_csv2("D:/proyecto de start up/R proyecto/survey.csv")
+
+#let's make the process faster than before. let's create a data frame we can later export
+
+#let's start off creating vectors for the columns
+Ppl_willing2work <- c(length(which(survey$`situación laboral` == "Estudiante" & survey$remunerado == "Sí")),
+                      length(which(survey$`situación laboral` == "Estudiante" & survey$remunerado == "No")), 
+                      length(which(survey$`situación laboral` == "encargado/a del hogar" & survey$remunerado == "Sí")),
+                      length(which(survey$`situación laboral` == "encargado/a del hogar" & survey$remunerado == "No")), 
+                      length(which(survey$`situación laboral` == "Empleado/a" & survey$remunerado == "Sí")), length(which(survey$`situación laboral` == "Empleado/a" & survey$remunerado == "No")), 
+                      length(which(survey$`situación laboral` == "Desempleado/a de corta duración" & survey$remunerado == "Sí")), 
+                      length(which(survey$`situación laboral` == "Desempleado/a de corta duración" & survey$remunerado == "No")), 
+                      length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)" & survey$remunerado == "Sí")), 
+                      length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)" & survey$remunerado == "No")), 
+                      length(which(survey$`situación laboral` == "Jubilado/a" & survey$remunerado == "Sí")), 
+                      length(which(survey$`situación laboral` == "Jubilado/a" & survey$remunerado == "No"))
+)
+#that's for the column of people who want and don't want to do the tasks, classified by their employment situation.
+#let's now make columns for , the percentages they represent in each category, the Y/N and their employment situation.
+
+employment_situation <- c("Estudiante", "Estudiante", "encargado/a del hogar", "encargado/a del hogar", "Empleado/a", "Empleado/a", "Desempleado/a de corta duración", "Desempleado/a de corta duración", "Desempleado de larga duración (2 años)", "Desempleado de larga duración (2 años)", "Jubilado/a", "Jubilado/a")
+
+willing2work <- c("Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No")
+
+pctg_ppl_willing2work <- c(length(which(survey$`situación laboral` == "Estudiante" & survey$remunerado == "Sí"))/length(which(survey$`situación laboral` == "Estudiante"))*100,
+                           length(which(survey$`situación laboral` == "Estudiante" & survey$remunerado == "No"))/length(which(survey$`situación laboral` == "Estudiante"))*100,                            length(which(survey$`situación laboral` == "encargado/a del hogar" & survey$remunerado == "Sí"))/length(which(survey$`situación laboral` == "encargado/a del hogar"))*100,
+                           length(which(survey$`situación laboral` == "encargado/a del hogar" & survey$remunerado == "No"))/length(which(survey$`situación laboral` == "encargado/a del hogar"))*100,
+                           length(which(survey$`situación laboral` == "Empleado/a" & survey$remunerado == "Sí"))/length(which(survey$`situación laboral` == "Empleado/a"))*100,
+                           length(which(survey$`situación laboral` == "Empleado/a" & survey$remunerado == "No"))/length(which(survey$`situación laboral` == "Empleado/a"))*100,
+                           length(which(survey$`situación laboral` == "Desempleado/a de corta duración" & survey$remunerado == "Sí"))/length(which(survey$`situación laboral` == "Desempleado/a de corta duración"))*100,
+                           length(which(survey$`situación laboral` == "Desempleado/a de corta duración" & survey$remunerado == "No"))/length(which(survey$`situación laboral` == "Desempleado/a de corta duración"))*100,
+                           length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)" & survey$remunerado == "Sí"))/length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)"))*100,
+                           length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)" & survey$remunerado == "No"))/length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)"))*100,
+                           length(which(survey$`situación laboral` == "Jubilado/a" & survey$remunerado == "Sí"))/length(which(survey$`situación laboral` == "Jubilado/a"))*100,
+                           length(which(survey$`situación laboral` == "Jubilado/a" & survey$remunerado == "No"))/length(which(survey$`situación laboral` == "Jubilado/a"))*100)
+
+#let's put it now in a data frame.
+ppl_willing_or_not_2work <- data.frame(employment_situation, willing2work, Ppl_willing2work, pctg_ppl_willing2work)
+
+#we can appreciate that people who are studying or are unemployed are the ones most likely to be willing to be paid to make domestic chores.
+#let's export the data frame to a csv for further visualization in tableau.
+
+write_csv2(ppl_willing_or_not_2work, "D:/proyecto de start up/R proyecto/R_export/people_willing_or_not_to_workDOM.csv")
+
+#notice that when exporting "Sí" will be exported as "SÃ-" since R doesn't recognize the accent mark.
+```
+```{r}
+#Let's study now the relationship between employment situation and willingness to hire.
+library(tidyverse)
+survey <- read_csv2("D:/proyecto de start up/R proyecto/survey.csv")
+
+#let's follow the same methodology than before, to find the proportions of each population segment  that are willing to hire.
+
+Ppl_willing2hire <- c(length(which(survey$`situación laboral` == "Estudiante" & survey$`dispuesto a contratar` == "Sí")),
+                      length(which(survey$`situación laboral` == "Estudiante" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`situación laboral` == "encargado/a del hogar" & survey$`dispuesto a contratar` == "Sí")),
+                      length(which(survey$`situación laboral` == "encargado/a del hogar" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`situación laboral` == "Empleado/a" & survey$`dispuesto a contratar` == "Sí")), length(which(survey$`situación laboral` == "Empleado/a" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`situación laboral` == "Desempleado/a de corta duración" & survey$`dispuesto a contratar` == "Sí")), 
+                      length(which(survey$`situación laboral` == "Desempleado/a de corta duración" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)" & survey$`dispuesto a contratar` == "Sí")), 
+                      length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`situación laboral` == "Jubilado/a" & survey$`dispuesto a contratar` == "Sí")), 
+                      length(which(survey$`situación laboral` == "Jubilado/a" & survey$`dispuesto a contratar` == "No"))
+)
+
+employment_situation <- c("Estudiante", "Estudiante", "encargado/a del hogar", "encargado/a del hogar", "Empleado/a", "Empleado/a", "Desempleado/a de corta duración", "Desempleado/a de corta duración", "Desempleado de larga duración (2 años)", "Desempleado de larga duración (2 años)", "Jubilado/a", "Jubilado/a")
+
+willing2hire <- c("Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No")
+
+pctg_ppl_willing2hire <- c(length(which(survey$`situación laboral` == "Estudiante" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`situación laboral` == "Estudiante"))*100,
+                           length(which(survey$`situación laboral` == "Estudiante" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`situación laboral` == "Estudiante"))*100,                            length(which(survey$`situación laboral` == "encargado/a del hogar" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`situación laboral` == "encargado/a del hogar"))*100,
+                           length(which(survey$`situación laboral` == "encargado/a del hogar" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`situación laboral` == "encargado/a del hogar"))*100,
+                           length(which(survey$`situación laboral` == "Empleado/a" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`situación laboral` == "Empleado/a"))*100,
+                           length(which(survey$`situación laboral` == "Empleado/a" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`situación laboral` == "Empleado/a"))*100,
+                           length(which(survey$`situación laboral` == "Desempleado/a de corta duración" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`situación laboral` == "Desempleado/a de corta duración"))*100,
+                           length(which(survey$`situación laboral` == "Desempleado/a de corta duración" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`situación laboral` == "Desempleado/a de corta duración"))*100,
+                           length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)"))*100,
+                           length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`situación laboral` == "Desempleado de larga duración (2 años)"))*100,
+                           length(which(survey$`situación laboral` == "Jubilado/a" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`situación laboral` == "Jubilado/a"))*100,
+                           length(which(survey$`situación laboral` == "Jubilado/a" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`situación laboral` == "Jubilado/a"))*100)
+
+#let's put it now in a data frame.
+ppl_willing_or_not_2hire <- data.frame(employment_situation, willing2work, Ppl_willing2hire, pctg_ppl_willing2hire)
+
+#let's export the data frame to a csv for further visualization in tableau.
+write_csv2(ppl_willing_or_not_2hire, "D:/proyecto de start up/R proyecto/R_export/people_willing_or_not_to_hireDOM.csv")
+
+#notice that when exporting "Sí" will be exported as "SÃ-" since R doesn't recognize the accent mark.
+
+
+```
+```{r}
+#Now let's see the relationship between the times they asked for help and willingness to hire.
+library(tidyverse)
+survey <- read_csv2("D:/proyecto de start up/R proyecto/survey.csv")
+willing2hire_help <- c("Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No","Sí", "No","Sí", "No")
+
+Ppl_willing2hire_help <- c(length(which(survey$`veces ha buscado ayuda` == "0" & survey$`dispuesto a contratar` == "Sí")),
+                      length(which(survey$`veces ha buscado ayuda` == "0" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`veces ha buscado ayuda` == "1" & survey$`dispuesto a contratar` == "Sí")),
+                      length(which(survey$`veces ha buscado ayuda` == "1" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`veces ha buscado ayuda` == "2" & survey$`dispuesto a contratar` == "Sí")), 
+                      length(which(survey$`veces ha buscado ayuda` == "2" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`veces ha buscado ayuda` == "3" & survey$`dispuesto a contratar` == "Sí")), 
+                      length(which(survey$`veces ha buscado ayuda` == "3" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`veces ha buscado ayuda` == "4" & survey$`dispuesto a contratar` == "Sí")), 
+                      length(which(survey$`veces ha buscado ayuda` == "4" & survey$`dispuesto a contratar` == "No")), 
+                      length(which(survey$`veces ha buscado ayuda` == "5" & survey$`dispuesto a contratar` == "Sí")), 
+                      length(which(survey$`veces ha buscado ayuda` == "5" & survey$`dispuesto a contratar` == "No")),
+                      length(which(survey$`veces ha buscado ayuda` == "6" & survey$`dispuesto a contratar` == "Sí")),
+                      length(which(survey$`veces ha buscado ayuda` == "6" & survey$`dispuesto a contratar` == "No")),
+                      length(which(survey$`veces ha buscado ayuda` == ">=7" & survey$`dispuesto a contratar` == "Sí")),
+                      length(which(survey$`veces ha buscado ayuda` == ">=7" & survey$`dispuesto a contratar` == "No"))
+)
+
+pctg_ppl_willing2hire_help <- c(length(which(survey$`veces ha buscado ayuda` == "0" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`veces ha buscado ayuda` == "0"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "0" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`veces ha buscado ayuda` == "0"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "1" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`veces ha buscado ayuda` == "1"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "1" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`veces ha buscado ayuda` == "1"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "2" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`veces ha buscado ayuda` == "2"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "2" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`veces ha buscado ayuda` == "2"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "3" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`veces ha buscado ayuda` == "3"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "3" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`veces ha buscado ayuda` == "3"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "4" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`veces ha buscado ayuda` == "4"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "4" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`veces ha buscado ayuda` == "4"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "5" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`veces ha buscado ayuda` == "5"))*100,
+                           length(which(survey$`veces ha buscado ayuda` == "5" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`veces ha buscado ayuda` == "5"))*100,
+length(which(survey$`veces ha buscado ayuda` == "6" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`veces ha buscado ayuda` == "6"))*100,
+length(which(survey$`veces ha buscado ayuda` == "6" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`veces ha buscado ayuda` == "6"))*100,
+length(which(survey$`veces ha buscado ayuda` == ">=7" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`veces ha buscado ayuda` == ">=7"))*100,
+length(which(survey$`veces ha buscado ayuda` == ">=7" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`veces ha buscado ayuda` == ">=7"))*100)
+
+asked_for_help <- c("0", "0", "1", "1", "2", "2", "3", "3", "4", "4", "5", "5", "6", "6", ">=7", ">=7")
+
+#let's put it now in a data frame.
+ppl_willing_or_not_2hire_help <- data.frame(asked_for_help, willing2hire_help, Ppl_willing2hire_help, pctg_ppl_willing2hire_help)
+
+#let's export the data frame to a csv for further visualization in tableau.
+write_csv2(ppl_willing_or_not_2hire_help, "D:/proyecto de start up/R proyecto/R_export/people_willing_or_not_to_hire_helpDOM.csv")
+
+#notice that when exporting "Sí" will be exported as "SÃ-" since R doesn't recognize the accent mark.
+#notice that as people ask more for help, they're more inclined to hire someone to help them.
+```
+```{r}
+#Having seen the relationship between asking for help and willingness to hire,
+#let's see who are the ones who are willing to hire whether they live alone or not, and by age.
+library(tidyverse)
+survey <- read_csv2("D:/proyecto de start up/R proyecto/survey.csv")
+
+
+
+#let's use directly the percentages vector
+pctg_ppl_willing2hire_age <- c(length(which(survey$`¿Cuál es su edad?` == "18-25" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`¿Cuál es su edad?` == "18-25"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "18-25" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`¿Cuál es su edad?` == "18-25"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "26-35" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`¿Cuál es su edad?` == "26-35"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "26-35" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`¿Cuál es su edad?` == "26-35"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "36-45" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`¿Cuál es su edad?` == "36-45"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "36-45" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`¿Cuál es su edad?` == "36-45"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "46-55" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`¿Cuál es su edad?` == "46-55"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "46-55" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`¿Cuál es su edad?` == "46-55"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "56-65" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`¿Cuál es su edad?` == "56-65"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "56-65" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`¿Cuál es su edad?` == "56-65"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "+65" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`¿Cuál es su edad?` == "+65"))*100,
+                           length(which(survey$`¿Cuál es su edad?` == "+65" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`¿Cuál es su edad?` == "+65"))*100
+)
+
+age_range <- c("18-25", "18-25", "26-35", "26-35", "36-45", "36-45", "46-55", "46-55", "56-65", "56-65", "+65", "+65")
+willing2hire_age <- c("Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No", "Sí", "No")
+
+#let's put it now in a data frame.
+ppl_willing_or_not_2hire_age <- data.frame(willing2hire_age, age_range,pctg_ppl_willing2hire_age)
+
+#let's export the data frame to a csv for further visualization in tableau.
+write_csv2(ppl_willing_or_not_2hire_age, "D:/proyecto de start up/R proyecto/R_export/people_willing_or_not_to_hire_ageDOM.csv")
+
+#surprisingly, we see that the percentages remain very constant across all age sectors
+```
+```{r}
+#let's get on with whether they live alone or not.
+library(tidyverse)
+survey <- read_csv2("D:/proyecto de start up/R proyecto/survey.csv")
+
+pctg_ppl_willing2hire_live <- c(length(which(survey$`Cuál su situación` == "Vive acompañado/a" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`Cuál su situación` == "Vive acompañado/a"))*100,
+                           length(which(survey$`Cuál su situación` == "Vive acompañado/a" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`Cuál su situación` == "Vive acompañado/a"))*100,
+                           length(which(survey$`Cuál su situación` == "Comparte alojamiento" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`Cuál su situación` == "Comparte alojamiento"))*100,
+                           length(which(survey$`Cuál su situación` == "Comparte alojamiento" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`Cuál su situación` == "Comparte alojamiento"))*100,
+                           length(which(survey$`Cuál su situación` == "Vive solo/a" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`¿Cuál es su edad?` == "Vive solo/a"))*100,
+                           length(which(survey$`Cuál su situación` == "Vive solo/a" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`¿Cuál es su edad?` == "Vive solo/a"))*100
+                           
+)
+living_state <- c("Vive acompañado/a", "Vive acompañado/a", "Comparte alojamiento", "Comparte alojamiento", "Vive solo/a", "Vive solo/a")
+willing2hire_living <- c("Sí", "No", "Sí", "No", "Sí", "No")
+
+
+#let's put it now in a data frame.
+ppl_willing_or_not_2hire_live <- data.frame(willing2hire_living, living_state,pctg_ppl_willing2hire_live)
+
+#let's export the data frame to a csv for further visualization in tableau.
+write_csv2(ppl_willing_or_not_2hire_live, "D:/proyecto de start up/R proyecto/R_export/people_willing_or_not_to_hire_liveDOM.csv")
+
+#both inf values are actually 50%
+#people who are most likely to hire someone to help them, live alone. (Although with a sample of 4 the results are not reliable)
+```
+```{r}
+#And is there a relation between living in the city or at the countryside and wanting to hire?
+library(tidyverse)
+survey <- read_csv2("D:/proyecto de start up/R proyecto/survey.csv")
+
+places <- c("poblado", "poblado", "ciudad", "ciudad")
+
+willing2hire_places <- c("Sí", "No", "Sí", "No")
+
+ppl_willing2hire_places <- c(length(which(survey$`ciudad o poblado` == "Poblado" & survey$`dispuesto a contratar` == "Sí")),
+                             length(which(survey$`ciudad o poblado` == "Poblado" & survey$`dispuesto a contratar` == "No")),
+                             length(which(survey$`ciudad o poblado` == "Ciudad" & survey$`dispuesto a contratar` == "Sí")),
+                             length(which(survey$`ciudad o poblado` == "Ciudad" & survey$`dispuesto a contratar` == "No"))
+                             )
+pctg_of_ppl_willing2hire_places <- c((length(which(survey$`ciudad o poblado` == "Poblado" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ciudad o poblado` == "Poblado")))*100,
+                             (length(which(survey$`ciudad o poblado` == "Poblado" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ciudad o poblado` == "Poblado")))*100,
+                             (length(which(survey$`ciudad o poblado` == "Ciudad" & survey$`dispuesto a contratar` == "Sí"))/length(which(survey$`ciudad o poblado` == "Ciudad")))*100,
+                             (length(which(survey$`ciudad o poblado` == "Ciudad" & survey$`dispuesto a contratar` == "No"))/length(which(survey$`ciudad o poblado` == "Ciudad")))*100
+                             )
+
+#time to set the vector in a data frame.
+ppl_willing_or_not2hire_places <- data.frame(places, willing2hire_places, ppl_willing2hire_places, pctg_of_ppl_willing2hire_places)
+
+#let's export the data frame
+write_csv2(ppl_willing_or_not2hire_places, "D:/proyecto de start up/R proyecto/R_export/people_willing_or_not_to_hire_placesDOM.csv")
+#Looking at the survey data, people from the countryside are more likely to hire people. This can be because lodging at the near countryside tend be bigger houses than apartments in the city.
+#Knowing also that most of the people willing to work on this kind of activities are students, let's see where do most of the students willing to work live to identify a potential problem with transportation.
+working_place_pctg <- c((length(which(survey$remunerado == "Sí" & survey$`ciudad o poblado` == "Ciudad")))/(length(which(survey$remunerado == "Sí")))*100,
+(length(which(survey$remunerado == "Sí" & survey$`ciudad o poblado` == "Poblado")))/(length(which(survey$remunerado == "Sí")))*100
+                         )
+
+hire_place_pctg <- c((length(which(survey$`dispuesto a contratar` == "Sí" & survey$`ciudad o poblado` == "Ciudad")))/(length(which(survey$`dispuesto a contratar` == "Sí")))*100,
+(length(which(survey$`dispuesto a contratar` == "Sí" & survey$`ciudad o poblado` == "Poblado")))/(length(which(survey$`dispuesto a contratar` == "Sí")))*100
+                         )
+
+place_of_living <- c("Ciudad", "Poblado")
+
+ppl_places <- data.frame(place_of_living, hire_place_pctg, working_place_pctg)
+
+write_csv2(ppl_places, "D:/proyecto de start up/R proyecto/R_export/people_provenanceDOM.csv")
+#To see the possible solutions and if the company need to implement one, we'll have to study data featuring the transportation methods these students have at their disposal.
+#according to the Junta de Andalucía (Andalusia's institutions) 44% of student transportion is made by foot or bike, over 15% is made by public transportation. foot or bike are followed by transportation by car as passenger, and this one followed by car as driver. They tend to share transportation by car.
+#sources: https://datos.gob.es/es/catalogo/a01002820-encuesta-social-2011-movilidad-en-las-regiones-urbanas-de-andalucia and https://www.juntadeandalucia.es/institutodeestadisticaycartografia/doctrabajo/movilidad/movilidad_perfiles.pdf
+
+```
+```{r}
+library(tidyverse)
+#now I'll come back to stablishing relationships between HDI components and ecommerce performance
+#let's retrieve some of the formatting done before:
+#time to set up our datasets, 
+#we'll use read_csv2 since .csv are formatted in the european way
+#first of all we set up the data for average household online spending
+#REMEMBER TO SET UP YOUR OWN DIRECTORY FOR THE CSV FILES
+Money_spent_by_household_online <- read_csv2("D:/proyecto de start up/R proyecto/money_spent_on_the_internet.csv")
+#then, we set up the money raised by online shopping.
+#notice that MM stands for Moving Average in spanish.
+Money_earned_through_online_shopping <- read_csv2("D:/proyecto de start up/R proyecto/money_earned_through_online_shopping.csv")
+#now, we set up the percentage of shopping done online
+Percentage_of_shopping_done_online <- read_csv2("D:/proyecto de start up/R proyecto/percentage_of_shopping_made_online.csv")
+#lastly we set up the HDI data.
+#this data is already sorted out using my own criteria.
+#this data's source is the https://databank.worldbank.org/Human-development-index/id/363d401b#
+HDI <- read_csv2("D:/proyecto de start up/R proyecto/human_development_index.csv")
+
+#we'll format the columns
+#starting with HDI, for simplicity I transposed it in excel, so let's get it to R
+HDI_transposed <- read_csv2("D:/proyecto de start up/R proyecto/human_development_index_transposed.csv")
+#we check column formats
+HDI_transposed_class <- lapply(HDI_transposed, function(x) type.convert(as.character(x), as.is = TRUE))
+View(HDI_transposed_class)
+#We can see years is arleady an integer, while the rest are characters and numeric values.
+#First let's remove the dollar simbols and turn the characters to integers, and set the separators.
+HDI_transposed$`GNI, PPP (current international $)` <- lapply(HDI_transposed$`GNI, PPP (current international $)`,gsub,pattern="$",fixed=TRUE,replacement="")
+HDI_transposed$`GNI, PPP (current international $)` <- lapply(HDI_transposed$`GNI, PPP (current international $)`,gsub,pattern=".",fixed=TRUE,replacement="")
+HDI_transposed$`GNI, PPP (current international $)` <- lapply(HDI_transposed$`GNI, PPP (current international $)`,gsub,pattern=",",fixed=TRUE,replacement=".")
+#now we set the columns to numeric
+HDI_transposed <- HDI_transposed %>% mutate_all(as.numeric)
+#time to check again its variable type
+HDI_transposed_class <- lapply(HDI_transposed, function(x) type.convert(as.character(x), as.is = TRUE))
+View(HDI_transposed_class)
+#Let's now format the rest of the datasets
+Money_earned_through_online_shopping_class <- lapply(Money_earned_through_online_shopping, function(x) type.convert(as.character(x), as.is = TRUE))
+
+View(Money_earned_through_online_shopping_class)
+
+Money_spent_by_household_online_class <- lapply(Money_spent_by_household_online, function(x) type.convert(as.character(x), as.is = TRUE))
+
+View(Money_spent_by_household_online_class)
+
+Percentage_of_shopping_done_online_class <- lapply(Percentage_of_shopping_done_online, function(x) type.convert(as.character(x), as.is = TRUE))
+
+View(Percentage_of_shopping_done_online_class)
+
+#we appreciate that they are already numeric so our formatting would be done.
+#we'll study the relationship between money raised by the sector and the number of individuals using the internet and the numer of servers active in the country
+#let's check linearity first.
+#to stablish those relations we'll make another data set
+years <- c(Money_earned_through_online_shopping$Year) 
+Money_online_shopping <- c(Money_earned_through_online_shopping$...7 )
+
+
+years <- years[-c(8:28)]
+Money_online_shopping <- Money_online_shopping[-c(8:28)]
+
+Av_spending <- c(Money_spent_by_household_online$Average_spending)
+Av_spending <- Av_spending[-8]
+#let's introduce the rest of the dataset
+
+users <- c(HDI_transposed$`Individuals using the Internet (% of population)`)
+servers <- c(HDI_transposed$`Secure Internet servers (per 1 million people)`)
+
+servers <- servers[-c(1:4)]
+users <- users[-c(1:4)]
+
+GNI <- c(HDI_transposed$`GNI, PPP (current international $)`)
+GNI <- GNI[-c(1:4)]
+
+shopping_made_online <- c(Percentage_of_shopping_done_online$Percentage_of_shopping_made_online)
+shopping_made_online <- shopping_made_online[-c(1:4)]
+
+servs_users_money_earned <- data.frame(years, GNI, Money_online_shopping, servers, users, Av_spending, shopping_made_online)
+
+#cleaning and formatting done, let's get to the analysis
+#I'll export the data frame in case I need to do any calculations or tests outside of R
+write_csv2(servs_users_money_earned, "D:/proyecto de start up/R proyecto/R_export/servs_users_money_earned.csv")
+#let's check normality for all variables
+if (shapiro.test(servs_users_money_earned$Money_online_shopping)$p.value > 0.05 & shapiro.test(servs_users_money_earned$servers)$p.value > 0.05 & shapiro.test(servs_users_money_earned$users)$p.value > 0.05 & shapiro.test(servs_users_money_earned$Av_spending)$p.value > 0.05 & shapiro.test(servs_users_money_earned$GNI)$p.value > 0.05 &
+shapiro.test(servs_users_money_earned$shopping_made_online)$p.value > 0.05    
+    ){
+  
+  print("all data is normaly distributed")
+} else if (shapiro.test(servs_users_money_earned$Money_online_shopping)$p.value < 0.05 | shapiro.test(servs_users_money_earned$servers)$p.value < 0.05 | shapiro.test(servs_users_money_earned$users)$p.value < 0.05 | shapiro.test(servs_users_money_earned$Av_spending)$p.value < 0.05 | shapiro.test(servs_users_money_earned$GNI)$p.value < 0.05 |
+shapiro.test(servs_users_money_earned$shopping_made_online)$p.value < 0.05           
+           ){
+  if(shapiro.test(servs_users_money_earned$Money_online_shopping)$p.value < 0.05){
+    print("Money earned by ecommerce is not normaly distributed")
+  }& if (shapiro.test(servs_users_money_earned$servers)$p.value < 0.05){
+    print("Number of sercure servers in Spain are not normaly distributed")
+  }& if (shapiro.test(servs_users_money_earned$users)$p.value < 0.05 ){
+    print("percentage of population who use internet are not normaly distributed")
+  }& if (shapiro.test(servs_users_money_earned$Av_spending)$p.value < 0.05){
+    print("Average spendig by household in Spain is not normaly distributed")
+  }& if (shapiro.test(servs_users_money_earned$GNI)$p.value < 0.05){
+    print("GNI is not normaly distributed")
+  }& if (shapiro.test(servs_users_money_earned$shopping_made_online)$p.value < 0.05){
+    print("shopping made online is not normaly distributed")
+  }
+}
+
+#and now linearity
+cor(servs_users_money_earned$Money_online_shopping, servs_users_money_earned$servers, method = 'pearson')
+#linearity is given
+cor(servs_users_money_earned$Money_online_shopping, servs_users_money_earned$users, method = 'pearson')
+#linearity is also given
+cor(servs_users_money_earned$Money_online_shopping, servs_users_money_earned$GNI, method = 'pearson')
+#weak linearity is given
+cor(servs_users_money_earned$Money_online_shopping, servs_users_money_earned$Av_spending, method = 'pearson')
+#linearity is given
+cor(servs_users_money_earned$Money_online_shopping, servs_users_money_earned$shopping_made_online, method = 'pearson')
+#linearity is given
+
+multivar_money_earned_model <- lm(Money_online_shopping ~ servers + Av_spending + GNI + shopping_made_online, servs_users_money_earned)
+summary(multivar_money_earned_model)
+
+#we've fitted an even more powerful model for predicting the money earned by the sector.
+#let's try predicting the average money spent by families on the internet.
+cor(servs_users_money_earned$Av_spending, servs_users_money_earned$servers, method = 'pearson')
+#linearity is given
+cor(servs_users_money_earned$Av_spending, servs_users_money_earned$users, method = 'pearson')
+#linearity is given
+cor(servs_users_money_earned$Av_spending, servs_users_money_earned$GNI, method = 'pearson')
+#weak linearity is given
+multivar_av_spending_model <- lm(Av_spending ~ users + servers + GNI, servs_users_money_earned)
+summary(multivar_av_spending_model)
+
+av_spending_model_servers <- lm(Av_spending ~ servers, servs_users_money_earned)
+summary(av_spending_model_servers)
+
+av_spending_model_servers_users <- lm(Av_spending ~ servers + users, servs_users_money_earned)
+summary(av_spending_model_servers_users)
+
+#none of the the models are precise enough which means that we need more explanatory variables, 
+#although relationships are clearly linear of degree 1.
+```
+
+
+
+
+
